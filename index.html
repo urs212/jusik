@@ -2,94 +2,88 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>통합 주식 거래소</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>주식 보유 현황 확인</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #0b0e11; color: white; font-family: sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; width: 100%; max-width: 1000px; margin-bottom: 20px; }
-        .card { background: #181a20; padding: 20px; border-radius: 12px; border: 1px solid #333; text-align: center; cursor: pointer; transition: 0.2s; }
-        .card:hover { border-color: #02c076; transform: translateY(-5px); }
-        .card.active { border-color: #02c076; background: #1e2329; }
-        .name { color: #848e9c; font-size: 14px; margin-bottom: 5px; }
-        .price { font-size: 24px; font-weight: bold; color: #02c076; }
-        .main-chart-container { background: #181a20; padding: 30px; border-radius: 20px; width: 100%; max-width: 1000px; height: 500px; border: 1px solid #333; position: relative; }
-        h1 { margin-bottom: 30px; color: #eaecef; }
+        body { background: #0b0e11; color: white; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .login-box { background: #181a20; padding: 30px; border-radius: 15px; border: 1px solid #333; text-align: center; width: 350px; }
+        input { width: 80%; padding: 12px; margin: 15px 0; border-radius: 8px; border: 1px solid #444; background: #2b2f36; color: white; text-align: center; font-size: 16px; }
+        button { width: 88%; padding: 12px; border-radius: 8px; border: none; background: #02c076; color: white; font-weight: bold; cursor: pointer; font-size: 16px; }
+        button:hover { background: #02a065; }
+        
+        .result-box { display: none; margin-top: 20px; width: 350px; background: #1e2329; padding: 20px; border-radius: 15px; border: 1px solid #02c076; }
+        .stock-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; }
+        .stock-item:last-child { border-bottom: none; }
+        .stock-name { color: #848e9c; }
+        .stock-count { color: #f0b90b; font-weight: bold; }
+        .error-msg { color: #f6465d; margin-top: 10px; font-size: 14px; display: none; }
     </style>
 </head>
 <body>
 
-    <h1>STOCKS DASHBOARD</h1>
-
-    <div class="dashboard">
-        <div class="card active" id="card-sh" onclick="switchStock('sh')">
-            <div class="name">임승혁 (SH)</div>
-            <div id="p-sh" class="price">0</div>
-        </div>
-        <div class="card" id="card-mid" onclick="switchStock('mid')">
-            <div class="name">중형주 (MID)</div>
-            <div id="p-mid" class="price">0</div>
-        </div>
-        <div class="card" id="card-core" onclick="switchStock('core')">
-            <div class="name">코어 (CORE)</div>
-            <div id="p-core" class="price">0</div>
-        </div>
-        <div class="card" id="card-server" onclick="switchStock('server')">
-            <div class="name">서버 (SERVER)</div>
-            <div id="p-server" class="price">0</div>
-        </div>
+    <div class="login-box">
+        <h2>내 주식 확인하기</h2>
+        <p style="color: #848e9c; font-size: 14px;">마인크래프트 닉네임을 입력하세요</p>
+        <input type="text" id="mcName" placeholder="닉네임 입력">
+        <button onclick="checkStock()">조회하기</button>
+        <div id="error" class="error-msg">해당 닉네임의 정보를 찾을 수 없습니다.</div>
     </div>
 
-    <div class="main-chart-container">
-        <canvas id="bigChart"></canvas>
+    <div id="result" class="result-box">
+        <h3 id="display-name" style="text-align: center; margin-top: 0;"></h3>
+        <div class="stock-item">
+            <span class="stock-name">임승혁 (SH)</span>
+            <span id="res-sh" class="stock-count">0</span>
+        </div>
+        <div class="stock-item">
+            <span class="stock-name">중형주 (MID)</span>
+            <span id="res-mid" class="stock-count">0</span>
+        </div>
+        <div class="stock-item">
+            <span class="stock-name">코어 (CORE)</span>
+            <span id="res-core" class="stock-count">0</span>
+        </div>
+        <div class="stock-item">
+            <span class="stock-name">서버 (SERVER)</span>
+            <span id="res-server" class="stock-count">0</span>
+        </div>
     </div>
 
     <script>
-        const firebaseConfig = { databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/" };
+        // 파이어베이스 설정 (본인의 정보로 유지됨)
+        const firebaseConfig = {
+            databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/"
+        };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        let currentStock = 'sh';
-        let stockHistory = [];
+        function checkStock() {
+            const name = document.getElementById('mcName').value.trim();
+            if (!name) return;
 
-        const ctx = document.getElementById('bigChart').getContext('2d');
-        const bigChart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: '실시간 시세', data: [], borderColor: '#02c076', backgroundColor: 'rgba(2, 192, 118, 0.1)', fill: true, tension: 0.4, borderWidth: 3 }] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#2b2f36' } }, y: { grid: { color: '#2b2f36' } } } }
-        });
-
-        // 데이터베이스 실시간 감시
-        db.ref('stock_history').limitToLast(30).on('value', (snapshot) => {
-            const val = snapshot.val();
-            if (!val) return;
-            stockHistory = Object.values(val);
-            updateDashboard();
-        });
-
-        function updateDashboard() {
-            if (stockHistory.length === 0) return;
-            
-            // 모든 카드 가격 업데이트
-            const latest = stockHistory[stockHistory.length - 1];
-            document.getElementById('p-sh').innerText = latest.sh.toLocaleString();
-            document.getElementById('p-mid').innerText = latest.mid.toLocaleString();
-            document.getElementById('p-core').innerText = latest.core.toLocaleString();
-            document.getElementById('p-server').innerText = latest.server.toLocaleString();
-
-            // 현재 선택된 종목 그래프 확대 갱신
-            bigChart.data.labels = stockHistory.map(e => e.time || "");
-            bigChart.data.datasets[0].data = stockHistory.map(e => e[currentStock]);
-            bigChart.data.datasets[0].label = currentStock.toUpperCase() + " 주가 추이";
-            bigChart.update();
-        }
-
-        function switchStock(id) {
-            currentStock = id;
-            document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
-            document.getElementById('card-' + id).classList.add('active');
-            updateDashboard();
+            // 데이터베이스에서 users/닉네임 경로 조회
+            db.ref('users/' + name).once('value').then((snapshot) => {
+                const data = snapshot.val();
+                
+                if (data) {
+                    document.getElementById('error').style.display = 'none';
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('display-name').innerText = name + "님의 자산";
+                    
+                    // 각 종목별 수량 표시 (데이터가 없으면 0으로 표시)
+                    document.getElementById('res-sh').innerText = (data.sh || 0) + " 주";
+                    document.getElementById('res-mid').innerText = (data.mid || 0) + " 주";
+                    document.getElementById('res-core').innerText = (data.core || 0) + " 주";
+                    document.getElementById('res-server').innerText = (data.server || 0) + " 주";
+                } else {
+                    document.getElementById('result').style.display = 'none';
+                    document.getElementById('error').style.display = 'block';
+                }
+            }).catch((err) => {
+                console.error(err);
+                alert("데이터를 불러오는 중 오류가 발생했습니다.");
+            });
         }
     </script>
 </body>
