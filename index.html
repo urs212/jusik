@@ -1,83 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>비트코인 스타일 주식 차트</title>
+    <title>실시간 주식 거래소</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #121212; color: white; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 90%; max-width: 1000px; margin-top: 50px; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .live-price { font-size: 32px; font-weight: bold; color: #00ff88; margin-bottom: 10px; }
-        .stock-name { font-size: 18px; color: #aaa; }
+        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .price-container { background: #181a20; padding: 20px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; text-align: center; width: 300px; }
+        .price-label { font-size: 14px; color: #848e9c; }
+        .current-price { font-size: 32px; font-weight: bold; color: #02c076; margin: 10px 0; }
+        .chart-box { background: #181a20; padding: 20px; border-radius: 12px; width: 90%; max-width: 900px; height: 450px; border: 1px solid #333; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="stock-name">(주)임승혁 실시간 시세</div>
-        <div id="price-sh" class="live-price">데이터 로딩 중...</div>
-        <canvas id="myChart"></canvas>
+
+    <div class="price-container">
+        <div class="price-label">(주)임승혁 실시간 시세</div>
+        <div id="price-sh" class="current-price">로딩 중...</div>
+    </div>
+
+    <div class="chart-box">
+        <canvas id="stockChart"></canvas>
     </div>
 
     <script>
+        // 1. 파이어베이스 연결 설정
         const firebaseConfig = { databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        const ctx = document.getElementById('myChart').getContext('2d');
-        const myChart = new Chart(ctx, {
+        // 2. 차트 초기 설정
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        const stockChart = new Chart(ctx, {
             type: 'line',
             data: { labels: [], datasets: [{
-                label: '주가 (원)',
+                label: '주가 (KRW)',
                 data: [],
-                borderColor: '#00ff88',
-                backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                borderWidth: 3,
+                borderColor: '#02c076',
+                backgroundColor: 'rgba(2, 192, 118, 0.1)',
+                borderWidth: 2,
                 fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-                pointHoverRadius: 8
+                tension: 0.3
             }] },
             options: {
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                return label + ': ' + context.parsed.y.toLocaleString() + '원';
-                            }
-                        }
-                    }
-                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
-                    x: { ticks: { color: '#888' }, grid: { display: false } },
-                    y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+                    x: { grid: { color: '#2b2f36' }, ticks: { color: '#848e9c' } },
+                    y: { grid: { color: '#2b2f36' }, ticks: { color: '#848e9c' } }
                 }
             }
         });
 
-        // 파이어베이스에서 데이터 가져오기 (최근 30개 기록)
-        db.ref('stock_history').limitToLast(30).on('value', (snapshot) => {
+        // 3. 실시간 가격 업데이트 (live_price)
+        db.ref('live_price').on('value', (snapshot) => {
             const data = snapshot.val();
-            if (!data) return;
+            if(data && data.sh) {
+                document.getElementById('price-sh').innerText = data.sh.toLocaleString() + "원";
+            }
+        });
+
+        // 4. 차트 그래프 업데이트 (stock_history)
+        db.ref('stock_history').limitToLast(20).on('value', (snapshot) => {
+            const history = snapshot.val();
+            if(!history) return;
 
             const labels = [];
-            const prices = [];
-            
-            Object.values(data).forEach(item => {
-                labels.push(item.time);
-                prices.push(item.sh);
-            });
-
-            myChart.data.labels = labels;
-            myChart.data.datasets[0].data = prices;
-            myChart.update();
-
-            const lastPrice = prices[prices.length - 1];
-            document.getElementById('price-sh').innerText = lastPrice.toLocaleString() + "원";
-        });
-    </script>
-</body>
-</html>
