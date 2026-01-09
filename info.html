@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>내 주식 확인하기</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding-top: 50px; }
+        .box { background: #181a20; padding: 25px; border-radius: 12px; border: 1px solid #333; width: 300px; text-align: center; }
+        input { width: 80%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #444; background: #2b2f36; color: white; }
+        button { width: 88%; padding: 10px; border-radius: 5px; border: none; background: #02c076; color: white; font-weight: bold; cursor: pointer; }
+        .info { margin-top: 20px; display: none; text-align: left; background: #1e2329; padding: 15px; border-radius: 8px; }
+        .line { display: flex; justify-content: space-between; margin: 8px 0; font-size: 15px; border-bottom: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h3>🔍 보유 주식 조회</h3>
+        <input type="text" id="name" placeholder="마크 닉네임 입력">
+        <button onclick="find()">보유량 확인</button>
+        <div id="res" class="info">
+            <h4 id="target" style="margin-top:0; color:#f0b90b;"></h4>
+            <div class="line"><span>SH:</span><span id="v1">0</span></div>
+            <div class="line"><span>MID:</span><span id="v2">0</span></div>
+            <div class="line"><span>CORE:</span><span id="v3">0</span></div>
+            <div class="line"><span>SERVER:</span><span id="v4">0</span></div>
+        </div>
+    </div>
+
+    <script>
+        firebase.initializeApp({ databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/" });
+        function find() {
+            const n = document.getElementById('name').value;
+            firebase.database().ref('users/' + n).once('value').then(sn => {
+                const d = sn.val();
+                if(!d) { alert("유저를 찾을 수 없습니다."); return; }
+                document.getElementById('res').style.display = 'block';
+                document.getElementById('target').innerText = n + "님의 자산";
+                document.getElementById('v1').innerText = (d.sh || 0) + "주";
+                document.getElementById('v2').innerText = (d.mid || 0) + "주";
+                document.getElementById('v3').innerText = (d.core || 0) + "주";
+                document.getElementById('v4').innerText = (d.server || 0) + "주";
+            });
+        }
+    </script>
+</body>
+</html>
