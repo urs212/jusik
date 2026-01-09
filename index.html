@@ -2,74 +2,95 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>실시간 주식 대시보드</title>
+    <title>통합 주식 거래소</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        :root {
-            --bg-color: #0b0e11;
-            --card-bg: #181a20;
-            --text-main: #eaecef;
-            --text-sub: #848e9c;
-            --accent: #02c076; /* 상승 초록색 */
-            --border: #2b2f36;
+        body { background: #0b0e11; color: white; font-family: sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; width: 100%; max-width: 1000px; margin-bottom: 20px; }
+        .card { background: #181a20; padding: 20px; border-radius: 12px; border: 1px solid #333; text-align: center; cursor: pointer; transition: 0.2s; }
+        .card:hover { border-color: #02c076; transform: translateY(-5px); }
+        .card.active { border-color: #02c076; background: #1e2329; }
+        .name { color: #848e9c; font-size: 14px; margin-bottom: 5px; }
+        .price { font-size: 24px; font-weight: bold; color: #02c076; }
+        .main-chart-container { background: #181a20; padding: 30px; border-radius: 20px; width: 100%; max-width: 1000px; height: 500px; border: 1px solid #333; position: relative; }
+        h1 { margin-bottom: 30px; color: #eaecef; }
+    </style>
+</head>
+<body>
+
+    <h1>STOCKS DASHBOARD</h1>
+
+    <div class="dashboard">
+        <div class="card active" id="card-sh" onclick="switchStock('sh')">
+            <div class="name">임승혁 (SH)</div>
+            <div id="p-sh" class="price">0</div>
+        </div>
+        <div class="card" id="card-mid" onclick="switchStock('mid')">
+            <div class="name">중형주 (MID)</div>
+            <div id="p-mid" class="price">0</div>
+        </div>
+        <div class="card" id="card-core" onclick="switchStock('core')">
+            <div class="name">코어 (CORE)</div>
+            <div id="p-core" class="price">0</div>
+        </div>
+        <div class="card" id="card-server" onclick="switchStock('server')">
+            <div class="name">서버 (SERVER)</div>
+            <div id="p-server" class="price">0</div>
+        </div>
+    </div>
+
+    <div class="main-chart-container">
+        <canvas id="bigChart"></canvas>
+    </div>
+
+    <script>
+        const firebaseConfig = { databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentStock = 'sh';
+        let stockHistory = [];
+
+        const ctx = document.getElementById('bigChart').getContext('2d');
+        const bigChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '실시간 시세', data: [], borderColor: '#02c076', backgroundColor: 'rgba(2, 192, 118, 0.1)', fill: true, tension: 0.4, borderWidth: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#2b2f36' } }, y: { grid: { color: '#2b2f36' } } } }
+        });
+
+        // 데이터베이스 실시간 감시
+        db.ref('stock_history').limitToLast(30).on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (!val) return;
+            stockHistory = Object.values(val);
+            updateDashboard();
+        });
+
+        function updateDashboard() {
+            if (stockHistory.length === 0) return;
+            
+            // 모든 카드 가격 업데이트
+            const latest = stockHistory[stockHistory.length - 1];
+            document.getElementById('p-sh').innerText = latest.sh.toLocaleString();
+            document.getElementById('p-mid').innerText = latest.mid.toLocaleString();
+            document.getElementById('p-core').innerText = latest.core.toLocaleString();
+            document.getElementById('p-server').innerText = latest.server.toLocaleString();
+
+            // 현재 선택된 종목 그래프 확대 갱신
+            bigChart.data.labels = stockHistory.map(e => e.time || "");
+            bigChart.data.datasets[0].data = stockHistory.map(e => e[currentStock]);
+            bigChart.data.datasets[0].label = currentStock.toUpperCase() + " 주가 추이";
+            bigChart.update();
         }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: 'Noto Sans KR', sans-serif;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
+        function switchStock(id) {
+            currentStock = id;
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+            document.getElementById('card-' + id).classList.add('active');
+            updateDashboard();
         }
-
-        h2 { margin-bottom: 30px; font-weight: 600; }
-
-        /* 상단 종목 카드 레이아웃 */
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            width: 95%;
-            max-width: 1100px;
-            margin-bottom: 25px;
-        }
-
-        .stock-card {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .stock-card:hover { border-color: var(--accent); transform: translateY(-3px); }
-        .stock-card.active { border-color: var(--accent); background: #1e2329; box-shadow: 0 4px 15px rgba(2, 192, 118, 0.2); }
-
-        .stock-name { font-size: 14px; color: var(--text-sub); font-weight: bold; }
-        .stock-price { font-size: 24px; font-weight: bold; color: var(--accent); margin-top: 8px; }
-
-        /* 차트 영역 */
-        .chart-container {
-            background: var(--card-bg);
-            padding: 25px;
-            border-radius: 15px;
-            width: 95%;
-            max-width: 1100px;
-            height: 500px;
-            border: 1px solid var(--border);
-            position: relative;
-        }
-
-        #loading {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: var(--
+    </script>
+</body>
+</html>
