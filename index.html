@@ -2,79 +2,94 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>실시간 주식 대시보드</title>
+    <title>통합 주식 거래소</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .price-box { background: #181a20; padding: 25px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; text-align: center; width: 350px; }
-        .price-label { font-size: 14px; color: #848e9c; margin-bottom: 5px; }
-        .price-value { font-size: 40px; font-weight: bold; color: #02c076; }
-        .chart-container { background: #181a20; padding: 20px; border-radius: 15px; width: 90%; max-width: 1000px; height: 500px; border: 1px solid #333; }
+        body { background: #0b0e11; color: white; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; width: 90%; max-width: 1000px; margin-bottom: 20px; }
+        .stock-card { background: #181a20; padding: 15px; border-radius: 12px; border: 1px solid #333; text-align: center; cursor: pointer; transition: 0.3s; }
+        .stock-card:hover { border-color: #02c076; }
+        .stock-name { font-size: 14px; color: #848e9c; }
+        .stock-price { font-size: 22px; font-weight: bold; color: #02c076; margin-top: 5px; }
+        .chart-container { background: #181a20; padding: 20px; border-radius: 15px; width: 90%; max-width: 1000px; height: 450px; border: 1px solid #333; }
+        .active { border-color: #02c076; background: #1e2329; }
     </style>
 </head>
 <body>
 
-    <div class="price-box">
-        <div class="price-label">(주)임승혁 실시간 시세</div>
-        <div id="sh-price" class="price-value">로딩 중...</div>
+    <h2 style="margin-bottom: 30px;">실시간 주식 대시보드</h2>
+
+    <div class="dashboard">
+        <div class="stock-card active" onclick="changeChart('sh')">
+            <div class="stock-name">임승혁(SH)</div>
+            <div id="price-sh" class="stock-price">0</div>
+        </div>
+        <div class="stock-card" onclick="changeChart('mid')">
+            <div class="stock-name">미드(MID)</div>
+            <div id="price-mid" class="stock-price">0</div>
+        </div>
+        <div class="stock-card" onclick="changeChart('core')">
+            <div class="stock-name">코어(CORE)</div>
+            <div id="price-core" class="stock-price">0</div>
+        </div>
+        <div class="stock-card" onclick="changeChart('server')">
+            <div class="stock-name">서버(SERVER)</div>
+            <div id="price-server" class="stock-price">0</div>
+        </div>
     </div>
 
     <div class="chart-container">
-        <canvas id="stockChart"></canvas>
+        <canvas id="mainChart"></canvas>
     </div>
 
     <script>
-        // 1. 파이어베이스 연결 설정 (유저님의 프로젝트 주소)
         const firebaseConfig = { databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 2. 차트 초기화 (비트코인 거래소 스타일)
-        const ctx = document.getElementById('stockChart').getContext('2d');
-        const stockChart = new Chart(ctx, {
+        let currentStock = 'sh';
+        let fullHistory = [];
+
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        const mainChart = new Chart(ctx, {
             type: 'line',
-            data: { labels: [], datasets: [{
-                label: '실시간 주가',
-                data: [],
-                borderColor: '#02c076',
-                backgroundColor: 'rgba(2, 192, 118, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2
-            }] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { grid: { color: '#2b2f36' }, ticks: { color: '#848e9c' } },
-                    y: { grid: { color: '#2b2f36' }, ticks: { color: '#848e9c' } }
-                }
-            }
+            data: { labels: [], datasets: [{ label: '주가', data: [], borderColor: '#02c076', backgroundColor: 'rgba(2, 192, 118, 0.1)', fill: true, tension: 0.4 }] },
+            options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // 3. 실시간 가격 업데이트 (live_price 데이터 감시)
-        db.ref('live_price/sh').on('value', (snapshot) => {
-            const price = snapshot.val();
-            if (price !== null) {
-                document.getElementById('sh-price').innerText = price.toLocaleString() + "원";
-                
-                // 그래프에 점 추가 (기록용 데이터가 없을 때 임시로 현재가 표시)
-                const now = new Date();
-                const timeLabel = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds();
-                
-                if (stockChart.data.labels.length > 20) {
-                    stockChart.data.labels.shift();
-                    stockChart.data.datasets[0].data.shift();
-                }
-                
-                stockChart.data.labels.push(timeLabel);
-                stockChart.data.datasets[0].data.push(price);
-                stockChart.update();
-            }
+        // 데이터 업데이트 로직
+        db.ref('stock_history').limitToLast(30).on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+            fullHistory = Object.values(data);
+            updateView();
         });
+
+        function updateView() {
+            const labels = fullHistory.map(entry => entry.time || "");
+            const prices = fullHistory.map(entry => entry[currentStock]);
+
+            mainChart.data.labels = labels;
+            mainChart.data.datasets[0].data = prices;
+            mainChart.data.datasets[0].label = currentStock.toUpperCase() + " 주가";
+            mainChart.update();
+
+            // 상단 카드 가격 업데이트
+            const latest = fullHistory[fullHistory.length - 1];
+            document.getElementById('price-sh').innerText = latest.sh.toLocaleString();
+            document.getElementById('price-mid').innerText = latest.mid.toLocaleString();
+            document.getElementById('price-core').innerText = latest.core.toLocaleString();
+            document.getElementById('price-server').innerText = latest.server.toLocaleString();
+        }
+
+        function changeChart(stock) {
+            currentStock = stock;
+            document.querySelectorAll('.stock-card').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            updateView();
+        }
     </script>
 </body>
 </html>
