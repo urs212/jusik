@@ -1,29 +1,23 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Crypto-Style Stock Chart</title>
+    <title>비트코인 스타일 주식 차트</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #0b0e11; color: #eaecef; font-family: sans-serif; padding: 20px; }
-        .chart-container { background: #181a20; padding: 20px; border-radius: 10px; width: 80%; margin: auto; }
-        .price-board { display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .price-card { text-align: center; }
-        .price-val { font-size: 24px; font-weight: bold; color: #f0b90b; }
+        body { background: #121212; color: white; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 90%; max-width: 1000px; margin-top: 50px; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .live-price { font-size: 32px; font-weight: bold; color: #00ff88; margin-bottom: 10px; }
+        .stock-name { font-size: 18px; color: #aaa; }
     </style>
 </head>
 <body>
-    <h2 style="text-align:center;">🚀 실시간 주식 거래소 대시보드</h2>
-    
-    <div class="price-board">
-        <div class="price-card"><div>(주)임승혁</div><div id="live-sh" class="price-val">0</div></div>
-        <div class="price-card"><div>(주)mid</div><div id="live-mid" class="price-val">0</div></div>
-    </div>
-
-    <div class="chart-container">
-        <canvas id="stockChart"></canvas>
+    <div class="container">
+        <div class="stock-name">(주)임승혁 실시간 시세</div>
+        <div id="price-sh" class="live-price">데이터 로딩 중...</div>
+        <canvas id="myChart"></canvas>
     </div>
 
     <script>
@@ -31,44 +25,58 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 차트 설정
-        const ctx = document.getElementById('stockChart').getContext('2d');
-        const stockChart = new Chart(ctx, {
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const myChart = new Chart(ctx, {
             type: 'line',
             data: { labels: [], datasets: [{
-                label: '(주)임승혁 주가',
+                label: '주가 (원)',
                 data: [],
-                borderColor: '#f0b90b',
-                backgroundColor: 'rgba(240, 185, 11, 0.1)',
-                borderWidth: 2,
+                borderColor: '#00ff88',
+                backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                borderWidth: 3,
                 fill: true,
-                tension: 0.4
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 8
             }] },
             options: {
-                responsive: true,
-                plugins: { tooltip: { mode: 'index', intersect: false } },
-                scales: { x: { grid: { color: '#2b2f36' } }, y: { grid: { color: '#2b2f36' } } }
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                return label + ': ' + context.parsed.y.toLocaleString() + '원';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#888' }, grid: { display: false } },
+                    y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+                }
             }
         });
 
-        // 데이터 실시간 감시 (기록 노드)
-        db.ref('stock_history').limitToLast(20).on('value', (snapshot) => {
+        // 파이어베이스에서 데이터 가져오기 (최근 30개 기록)
+        db.ref('stock_history').limitToLast(30).on('value', (snapshot) => {
             const data = snapshot.val();
+            if (!data) return;
+
             const labels = [];
             const prices = [];
             
-            for (let id in data) {
-                labels.push(data[id].time);
-                prices.push(data[id].sh);
-            }
-            
-            stockChart.data.labels = labels;
-            stockChart.data.datasets[0].data = prices;
-            stockChart.update();
-            
-            // 실시간 가격 표시
+            Object.values(data).forEach(item => {
+                labels.push(item.time);
+                prices.push(item.sh);
+            });
+
+            myChart.data.labels = labels;
+            myChart.data.datasets[0].data = prices;
+            myChart.update();
+
             const lastPrice = prices[prices.length - 1];
-            document.getElementById('live-sh').innerText = lastPrice.toLocaleString() + "원";
+            document.getElementById('price-sh').innerText = lastPrice.toLocaleString() + "원";
         });
     </script>
 </body>
