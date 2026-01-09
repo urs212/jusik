@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>서버 실시간 주식 현황</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        body { background: #121212; color: white; font-family: 'Pretendard', sans-serif; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 600px; margin: 50px auto; }
+        .stock-card { background: #1e1e1e; padding: 25px; border-radius: 20px; border: 1px solid #333; }
+        .price { font-size: 32px; font-weight: bold; color: #4caf50; margin-top: 10px; }
+        .label { color: #888; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1 style="margin-top: 50px;">📈 실시간 주식 거래소</h1>
+    <div class="grid">
+        <div class="stock-card"><div class="label">(주)임승혁</div><div id="sh" class="price">0원</div></div>
+        <div class="stock-card"><div class="label">(주)mid</div><div id="mid" class="price">0원</div></div>
+        <div class="stock-card"><div class="label">(주)core</div><div id="core" class="price">0원</div></div>
+        <div class="stock-card"><div class="label">(주)server</div><div id="server" class="price">0원</div></div>
+    </div>
+
+    <script>
+        // 1. 파이어베이스 연결 설정
+        const firebaseConfig = {
+            databaseURL: "https://midocre-a86a5-default-rtdb.firebaseio.com/"
+        };
+
+        // 2. 초기화
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // 3. 실시간 데이터 업데이트 함수
+        function updateStock(id) {
+            database.ref('stocks/' + id).on('value', (snapshot) => {
+                const value = snapshot.val();
+                const element = document.getElementById(id);
+                if (value !== null) {
+                    element.innerText = value.toLocaleString() + "원";
+                    // 값이 변할 때 반짝이는 효과 (선택사항)
+                    element.style.color = "#81c784";
+                    setTimeout(() => { element.style.color = "#4caf50"; }, 500);
+                }
+            });
+        }
+
+        // 실행
+        updateStock('sh');
+        updateStock('mid');
+        updateStock('core');
+        updateStock('server');
+    </script>
+</body>
+</html>
